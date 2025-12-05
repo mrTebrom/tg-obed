@@ -3,11 +3,15 @@ import dotenv from 'dotenv';
 
 import { UserDB } from './db/user.db';
 import { UserService } from './service/user.service';
+
 import { startCommand } from './command/start.command';
 import { MenuService } from './command/menu.command';
+
 import { LunchDB } from './db/lunch.db';
 import { LunchService } from './service/lunch.service';
+import { lunchCommand } from './command/lunch.command';
 
+import { adminCommand } from './command/admin.command';
 // Загружаем переменные окружения
 dotenv.config();
 
@@ -34,5 +38,7 @@ const lunchService = new LunchService(lunchDB, userDB);
 
 // --- COMMANDS ---
 startCommand(bot, userService, menuService);
+lunchCommand(bot, lunchService);
+adminCommand(bot, lunchService, userService);
 
 console.log('Бот запущен...');

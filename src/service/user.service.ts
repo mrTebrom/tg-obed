@@ -42,4 +42,30 @@ export class UserService {
 
         return `Имя обновлено ✔️ Новое имя: ${newName}`;
     }
+
+    // Проверка админских прав
+    hasAdminAccess(tid: number): boolean {
+        const user = this.userDB.getUser(tid);
+        return user?.role === 'admin';
+    }
+
+    // Установка роли пользователя
+    setUserRole(tid: number, role: 'admin' | 'pk' | 'cashier' | 'user'): string {
+        if (!this.userDB.exists(tid)) {
+            return 'Пользователь не найден. Он должен сначала зарегистрироваться.';
+        }
+
+        return this.userDB.setRole(tid, role);
+    }
+
+    // Получить всех пользователей
+    getAllUsers() {
+        return this.userDB.getAllUser();
+    }
+
+    // Получить роль пользователя
+    getUserRole(tid: number): string {
+        const user = this.userDB.getUser(tid);
+        return user?.role || 'не зарегистрирован';
+    }
 }

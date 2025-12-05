@@ -18,10 +18,9 @@ export class LunchService {
         return new Date().toISOString().split('T')[0];
     }
 
-    getSlots() {
+    getSlots(): Record<string, number> {
         const date = this.today();
 
-        // создаём запись дня, если её нет
         if (!this.lunchDB.entity[date]) {
             this.lunchDB.entity[date] = {};
         }
@@ -54,7 +53,7 @@ export class LunchService {
             this.lunchDB.entity[date][slot] = [];
         }
 
-        // Проверяем, есть ли запись уже у пользователя
+        // Проверяем, есть ли запись уже у пользователя на сегодня
         for (const sl of this.slots) {
             if (this.lunchDB.entity[date][sl]?.includes(tid)) {
                 return `Вы уже записаны на обед (${sl}).`;
@@ -82,7 +81,6 @@ export class LunchService {
             if (!arr) continue;
 
             const index = arr.indexOf(tid);
-
             if (index !== -1) {
                 arr.splice(index, 1);
                 this.lunchDB.save();
@@ -91,5 +89,32 @@ export class LunchService {
         }
 
         return 'У вас нет брони на сегодня.';
+    }
+
+    getLunchList() {
+        const date = this.today();
+
+        const result: { slot: string; users: { tid: number; name: string }[] }[] = [];
+
+        if (!this.lunchDB.entity[date]) {
+            return [];
+        }
+
+        for (const slot of this.slots) {
+            const tids = this.lunchDB.entity[date][slot] || [];
+
+            result.push({
+                slot,
+                users: tids.map((tid) => {
+                    const user = this.userDB.getUser(tid);
+                    return {
+                        tid,
+                        name: user?.name || 'Неизвестно',
+                    };
+                }),
+            });
+        }
+
+        return result;
     }
 }

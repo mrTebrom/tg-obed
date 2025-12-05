@@ -1,9 +1,10 @@
 import path from 'path';
 import fs from 'fs';
 
-interface IUser {
+export interface IUser {
     tid: number;
     name: string;
+    role: 'admin' | 'pk' | 'cashier' | 'user';
 }
 
 export class UserDB {
@@ -33,16 +34,34 @@ export class UserDB {
         return Boolean(this.entity[tid]);
     }
 
-    // Регистрация с проверкой exists
+    // Регистрация
+    // роль ставим 'user' по умолчанию
     register(tid: number, name: string) {
         if (this.exists(tid)) {
-            return { error: true, message: 'Пользователь уже существует', user: this.entity[tid] };
+            return { error: true, user: this.entity[tid] };
         }
 
-        this.entity[tid] = { tid, name };
+        this.entity[tid] = {
+            tid,
+            name,
+            role: 'user',
+        };
+
         this.save();
 
         return { error: false, user: this.entity[tid] };
+    }
+
+    // Установка роли
+    setRole(tid: number, role: IUser['role']) {
+        const user = this.getUser(tid);
+        if (!user) return 'Пользователь не найден.';
+
+        user.role = role;
+        this.entity[tid] = user;
+        this.save();
+
+        return `Роль обновлена: ${role}`;
     }
 
     getUser(tid: number): IUser | null {
@@ -54,11 +73,14 @@ export class UserDB {
     }
 
     editUser(tid: number, name: string) {
-        if (!this.exists(tid)) return null;
+        const user = this.getUser(tid);
+        if (!user) return null;
 
-        this.entity[tid].name = name;
+        user.name = name;
+
+        this.entity[tid] = user;
         this.save();
 
-        return this.entity[tid];
+        return user;
     }
 }
