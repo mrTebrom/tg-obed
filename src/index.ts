@@ -11,6 +11,10 @@ import { LunchDB } from './db/lunch.db';
 import { LunchService } from './service/lunch.service';
 import { lunchCommand } from './command/lunch.command';
 
+import { BreakDB } from './db/break.db';
+import { BreakService } from './service/break.service';
+import { breakCommand } from './command/break.command';
+
 import { adminCommand } from './command/admin.command';
 // Загружаем переменные окружения
 dotenv.config();
@@ -18,7 +22,7 @@ dotenv.config();
 const token = process.env.BOT_TOKEN;
 
 if (!token) {
-    throw new Error('BOT_TOKEN не найден в .env');
+ throw new Error('BOT_TOKEN не найден в .env');
 }
 
 // --- BOT ---
@@ -31,14 +35,19 @@ userDB.init();
 const lunchDB = new LunchDB();
 lunchDB.init();
 
+const breakDB = new BreakDB();
+breakDB.init();
+
 // --- SERVICE ---
-const menuService = new MenuService(bot);
 const userService = new UserService(userDB);
 const lunchService = new LunchService(lunchDB, userDB);
+const breakService = new BreakService(breakDB, userDB, lunchDB, bot);
+const menuService = new MenuService(bot, userService, lunchService, breakService);
 
 // --- COMMANDS ---
 startCommand(bot, userService, menuService);
 lunchCommand(bot, lunchService);
-adminCommand(bot, lunchService, userService);
+breakCommand(bot, breakService, userService);
+adminCommand(bot, lunchService, userService, breakService, menuService);
 
 console.log('Бот запущен...');
