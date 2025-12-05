@@ -44,18 +44,17 @@ export class MenuService {
     return;
    }
 
-   let adminText = `📋 *Расписание обедов (кто когда)*\n\n`;
+   let adminText = `📋 *Расписание обедов*\n\n`;
 
    for (const slotInfo of list) {
     const users = slotInfo.users;
 
     if (users.length === 0) {
-     adminText += `• ${slotInfo.slot}: _никого_\n`;
+     adminText += `• *${slotInfo.slot}*: _никого_\n`;
     } else {
-     adminText += `• ${slotInfo.slot}:\n`;
-     for (const u of users) {
-      adminText += `    — ${u.name}\n`;
-     }
+     // Форматируем список пользователей красиво
+     const userNames = users.map((u) => `*${u.name}*`).join(', ');
+     adminText += `• *${slotInfo.slot}*: ${userNames}\n`;
     }
    }
 
@@ -95,15 +94,18 @@ export class MenuService {
     return;
    }
 
-   let historyText = `📊 *Расписание перерывов (кто выходил когда)*\n\n`;
+   let historyText = `📊 *Расписание перерывов*\n\n`;
 
-   for (const userHistory of history) {
-    historyText += `• ${userHistory.name}:\n`;
-    for (const startTime of userHistory.breaks) {
-     const date = new Date(startTime);
-     const timeStr = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-     historyText += `    — ${timeStr}\n`;
-    }
+   // Сортируем по времени начала (от старых к новым)
+   const sortedHistory = [...history].sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+
+   for (const record of sortedHistory) {
+    const startTime = new Date(record.start);
+    const endTime = new Date(record.end);
+    const startStr = startTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    const endStr = endTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+
+    historyText += `• *${record.name}* | ${startStr} - ${endStr}\n`;
    }
 
    this.bot.sendMessage(chatId, historyText, { parse_mode: 'Markdown' });
@@ -112,9 +114,59 @@ export class MenuService {
 
   if (text === '✅ Кто свободен') {
    const freeUsers = this.breakService.getFreeUsers();
+   const activeBreaks = this.breakService.getActiveBreaks();
+   const lunchList = this.lunchService.getLunchList();
+
+   // Подсчитываем сколько людей на обеде (только тех, у кого текущее время попадает в слот)
+   let onLunchCount = 0;
+   const onLunchNames: string[] = [];
+   const now = new Date();
+   const currentHour = now.getHours();
+   const currentMinute = now.getMinutes();
+   const currentTime = currentHour * 60 + currentMinute;
+
+   for (const slot of lunchList) {
+    // Парсим слот (формат: "12:00-13:00")
+    const [startStr, endStr] = slot.slot.split('-');
+    if (!startStr || !endStr) continue;
+
+    const [startHour, startMin] = startStr.split(':').map(Number);
+    const [endHour, endMin] = endStr.split(':').map(Number);
+
+    if (isNaN(startHour) || isNaN(startMin) || isNaN(endHour) || isNaN(endMin)) {
+     continue;
+    }
+
+    const startTime = startHour * 60 + startMin;
+    const endTime = endHour * 60 + endMin;
+
+    // Проверяем, попадает ли текущее время в диапазон слота
+    if (currentTime >= startTime && currentTime < endTime) {
+     for (const user of slot.users) {
+      onLunchCount++;
+      if (!onLunchNames.includes(user.name)) {
+       onLunchNames.push(user.name);
+      }
+     }
+    }
+   }
 
    if (freeUsers.length === 0) {
-    this.bot.sendMessage(chatId, 'Сейчас все заняты (на обеде или на перерыве).');
+    // Более точное сообщение о том, почему все заняты
+    const reasons: string[] = [];
+    if (activeBreaks.length > 0) {
+     const breakNames = activeBreaks.map((b) => b.name).join(', ');
+     reasons.push(`на перерыве: ${breakNames}`);
+    }
+    if (onLunchCount > 0) {
+     reasons.push(`на обеде: ${onLunchNames.join(', ')}`);
+    }
+
+    if (reasons.length > 0) {
+     this.bot.sendMessage(chatId, `Сейчас все заняты:\n${reasons.join('\n')}`);
+    } else {
+     this.bot.sendMessage(chatId, 'Сейчас все заняты.');
+    }
     return;
    }
 
@@ -128,7 +180,7 @@ export class MenuService {
      user: '👤',
     };
 
-    freeText += `${roleEmoji[user.role as keyof typeof roleEmoji] || '👤'} ${user.name}\n`;
+    freeText += `${roleEmoji[user.role as keyof typeof roleEmoji] || '👤'} *${user.name}*\n`;
    }
 
    this.bot.sendMessage(chatId, freeText, { parse_mode: 'Markdown' });

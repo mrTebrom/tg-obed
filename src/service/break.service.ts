@@ -116,23 +116,15 @@ export class BreakService {
   const todayData = this.breakDB.getTodayData();
   const history = todayData.history;
 
-  // Группируем по пользователям
-  const userMap: Record<number, { name: string; breaks: string[] }> = {};
-
-  for (const record of history) {
-   if (!userMap[record.tid]) {
-    userMap[record.tid] = {
-     name: record.name,
-     breaks: [],
-    };
-   }
-   userMap[record.tid].breaks.push(record.start);
-  }
-
-  return Object.values(userMap);
+  // Возвращаем полные записи с start и end
+  return history.map((record) => ({
+   name: record.name,
+   start: record.start,
+   end: record.end,
+  }));
  }
 
- // Получить список свободных (не на обеде и не на перерыве)
+ // Получить список свободных (не на обеде и не на перерыве, исключая админов)
  getFreeUsers() {
   const allUsers = this.userDB.getAllUser();
   const todayData = this.breakDB.getTodayData();
@@ -144,12 +136,62 @@ export class BreakService {
    onBreak.add(record.tid);
   }
 
-  // Получаем всех кто на обеде
+  // Получаем всех кто на обеде (только тех, у кого текущее время попадает в слот)
   const onLunch = new Set<number>();
   if (this.lunchDB.entity[today]) {
+   // Собираем всех пользователей из всех слотов
+   const allLunchUsers = new Set<number>();
    for (const slot of Object.values(this.lunchDB.entity[today])) {
     if (Array.isArray(slot)) {
-     slot.forEach((tid) => onLunch.add(tid));
+     slot.forEach((tid) => {
+      const tidNum = typeof tid === 'string' ? Number(tid) : tid;
+      if (!isNaN(tidNum)) {
+       allLunchUsers.add(tidNum);
+      }
+     });
+    }
+   }
+
+   // Проверяем каждого пользователя - находится ли он в активном слоте
+   for (const tid of allLunchUsers) {
+    // Используем LunchService для проверки активного слота
+    // Но у нас нет прямого доступа к LunchService, поэтому проверяем вручную
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const currentTime = currentHour * 60 + currentMinute;
+
+    // Ищем пользователя во всех слотах и проверяем время
+    let isInActiveSlot = false;
+    for (const slot of Object.keys(this.lunchDB.entity[today])) {
+     const tids = this.lunchDB.entity[today][slot];
+     if (!Array.isArray(tids) || !tids.includes(tid)) {
+      continue;
+     }
+
+     // Парсим слот (формат: "12:00-13:00")
+     const [startStr, endStr] = slot.split('-');
+     if (!startStr || !endStr) continue;
+
+     const [startHour, startMin] = startStr.split(':').map(Number);
+     const [endHour, endMin] = endStr.split(':').map(Number);
+
+     if (isNaN(startHour) || isNaN(startMin) || isNaN(endHour) || isNaN(endMin)) {
+      continue;
+     }
+
+     const startTime = startHour * 60 + startMin;
+     const endTime = endHour * 60 + endMin;
+
+     // Проверяем, попадает ли текущее время в диапазон слота
+     if (currentTime >= startTime && currentTime < endTime) {
+      isInActiveSlot = true;
+      break;
+     }
+    }
+
+    if (isInActiveSlot) {
+     onLunch.add(tid);
     }
    }
   }
@@ -157,6 +199,10 @@ export class BreakService {
   const result: { tid: number; name: string; role: string }[] = [];
 
   for (const user of Object.values(allUsers)) {
+   // Исключаем админов из списка свободных
+   if (user.role === 'admin') continue;
+
+   // Проверяем, что пользователь не на перерыве и не на обеде
    if (!onBreak.has(user.tid) && !onLunch.has(user.tid)) {
     result.push({
      tid: user.tid,
@@ -167,5 +213,10 @@ export class BreakService {
   }
 
   return result;
+ }
+ getActiveBreakByTid(tid: number) {
+  const todayData = this.breakDB.getTodayData();
+  // Ищем в активных перерывах запись с этим tid
+  return todayData.active.find((r) => r.tid === tid) ?? null;
  }
 }
