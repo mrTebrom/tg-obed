@@ -48,17 +48,17 @@ export class UserDB {
 
  // Проверка существования пользователя
  exists(tid: number): boolean {
-  return Boolean(this.entity[tid]);
+  return Boolean(this.entity[String(tid)]);
  }
 
  // Регистрация
  // роль ставим 'user' по умолчанию
  register(tid: number, name: string) {
   if (this.exists(tid)) {
-   return { error: true, user: this.entity[tid] };
+   return { error: true, user: this.entity[String(tid)] };
   }
 
-  this.entity[tid] = {
+  this.entity[String(tid)] = {
    tid,
    name,
    role: 'user',
@@ -66,7 +66,7 @@ export class UserDB {
 
   this.save();
 
-  return { error: false, user: this.entity[tid] };
+  return { error: false, user: this.entity[String(tid)] };
  }
 
  // Установка роли
@@ -75,14 +75,14 @@ export class UserDB {
   if (!user) return 'Пользователь не найден.';
 
   user.role = role;
-  this.entity[tid] = user;
+  this.entity[String(tid)] = user;
   this.save();
 
   return `Роль обновлена: ${role}`;
  }
 
- getUser(tid: number): IUser | null {
-  return this.entity[tid] || null;
+ getUser(tid: number) {
+  return this.entity[String(tid)] ?? null;
  }
 
  getAllUser() {
@@ -95,7 +95,7 @@ export class UserDB {
 
   user.name = name;
 
-  this.entity[tid] = user;
+  this.entity[String(tid)] = user;
   this.save();
 
   return user;

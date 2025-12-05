@@ -11,7 +11,9 @@ export class BreakService {
   '10': 4,
   '15': 3,
  };
-
+ getMode(tid: number): '10' | '15' | null {
+  return this.breakDB.getUserMode(tid);
+ }
  // Пользователь выбирает режим (10 или 15)
  chooseMode(tid: number, mode: '10' | '15') {
   const user = this.userDB.getUser(tid);
@@ -26,32 +28,58 @@ export class BreakService {
   return `Вы выбрали режим перерывов: ${mode} минут.`;
  }
 
- startBreak(tid: number) {
+ // Проверка, можно ли начать перерыв (никто другой не на перерыве)
+ canStartBreak(): { can: boolean; message?: string } {
+  const todayData = this.breakDB.getTodayData();
+
+  if (todayData.active.length > 0) {
+   const activeUser = todayData.active[0];
+   return {
+    can: false,
+    message: `Сейчас на перерыве: *${activeUser.name}*. Перерыв закончится в *${new Date(activeUser.end).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}*. Подождите, пока он закончится.`,
+   };
+  }
+
+  return { can: true };
+ }
+
+ startBreak(tid: number): { success: boolean; message: string; startTime?: string; endTime?: string } {
   const user = this.userDB.getUser(tid);
-  if (!user) return 'Вы не зарегистрированы.';
+  if (!user) {
+   return { success: false, message: 'Вы не зарегистрированы.' };
+  }
 
   const mode = this.breakDB.getUserMode(tid);
   if (!mode) {
-   return 'Выберите режим перерывов: 10 минут × 4 или 15 минут × 3.';
+   return { success: false, message: 'Выберите режим перерывов: 10 минут × 4 или 15 минут × 3.' };
   }
 
   const used = this.breakDB.getUserUsage(tid);
   const limit = this.modeLimits[mode];
 
   if (used >= limit) {
-   return `Вы уже использовали все свои перерывы (${limit}).`;
+   return { success: false, message: `Вы уже использовали все свои перерывы (${limit}).` };
   }
 
   const todayData = this.breakDB.getTodayData();
 
-  // Проверяем, не активный ли уже перерыв
+  // Проверяем, не активный ли уже перерыв у этого пользователя
   if (todayData.active.find((r) => r.tid === tid)) {
-   return 'Вы уже на перерыве.';
+   return { success: false, message: 'Вы уже на перерыве.' };
+  }
+
+  // Проверяем, не занят ли перерыв другим пользователем
+  const canStart = this.canStartBreak();
+  if (!canStart.can) {
+   return { success: false, message: canStart.message || 'Перерыв занят другим пользователем.' };
   }
 
   const duration = Number(mode); // 10 или 15 минут
   const start = new Date();
   const end = new Date(start.getTime() + duration * 60 * 1000);
+
+  const startTimeStr = start.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  const endTimeStr = end.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 
   const record = {
    tid,
@@ -69,7 +97,12 @@ export class BreakService {
    this.bot.sendMessage(tid, 'Ваш перерыв окончен ⏰');
   }, duration * 60 * 1000);
 
-  return `Перерыв начался. Он закончится в *${end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}*.`;
+  return {
+   success: true,
+   message: `Вы на перерыве ☕`,
+   startTime: startTimeStr,
+   endTime: endTimeStr,
+  };
  }
 
  // Админу показать текущих людей на перерыве
